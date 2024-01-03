@@ -1,0 +1,124 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import lognorm
+
+
+
+# File paths
+nacl_data_path = 'Physical Properties_NaCl 80nm Atomizer.csv'
+smps_data_path = 'AtmSMPS.csv'
+
+# Load NaCl aerosol data
+nacl_data = pd.read_csv(nacl_data_path)
+
+# Load SMPS data
+smps_data = pd.read_csv(smps_data_path)
+
+# Extracting bin edges and concentration values from the SMPS data
+try:
+    bin_edges_smps = smps_data['Unnamed: 0'].values
+except:
+    bin_edges_smps = smps_data['Sample #'].values
+
+# nm to um
+bin_edges_smps = bin_edges_smps / 1000
+concentration_smps = smps_data['0'].values
+
+# Histogram for the NaCl data
+if 'ECD (μm)' in nacl_data.columns:
+    ecd_data = nacl_data['ECD (μm)'].dropna()
+    min_ecd = ecd_data.min()
+    max_ecd = 0.3
+    log_min_ecd = np.log10(min_ecd)
+    log_max_ecd = np.log10(max_ecd)
+    log_bin_width = 0.037
+    log_bin_edges = np.arange(log_min_ecd, log_max_ecd + log_bin_width, log_bin_width)
+    bin_edges_log = 10 ** log_bin_edges
+    counts, _ = np.histogram(ecd_data, bins=bin_edges_log)
+    log_bin_edges = np.log10(bin_edges_log)
+    bin_widths = np.diff(bin_edges_log)
+    dN_dlogDp = counts / bin_widths
+    bin_centers_log = (bin_edges_log[:-1] + bin_edges_log[1:]) / 2
+    # Fit log-normal distributions
+    from scipy.optimize import curve_fit
+    from numpy import exp
+
+    def gaus(x, a, x0, sigma):
+        """
+        Gaussian function.
+        x : Independent variable
+        a : Amplitude
+        x0: Mean
+        sigma: Standard deviation
+        """
+
+#        return a * exp(-(np.log10(x-x0))**2 / (2 * sigma**2))
+        dp=x
+        return (a/(np.sqrt(2*np.pi)*np.log(sigma)*np.log(dp))*\
+              np.exp(-(np.log(dp)-np.log(x0))**2/(2*np.log(sigma)**2)))
+
+    # Function to fit the data to a Gaussian distribution
+    def fit_gaussian(data_x, data_y):
+        """
+        Fit the provided data to a Gaussian distribution.
+        data_x: The x values of the data
+        data_y: The y values of the data
+        """
+        # Initial guesses for a, x0, and sigma
+        initial_guesses = [max(data_y), np.mean(data_x), np.std(data_x)]
+        params, _ = curve_fit(gaus, data_x, data_y, p0=initial_guesses)
+        return params
+    
+    bin_centers = (bin_edges_log[:-1] + bin_edges_log[1:]) / 2
+    # Fit the SMPS and CCSEM data to the Gaussian function
+    params_smps = fit_gaussian(bin_edges_smps, concentration_smps)
+    params_nacl = fit_gaussian(bin_centers_log, dN_dlogDp)
+    # Plot
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax1.set_xlabel('Particle Diameter (μm)')
+    ax1.set_ylabel('SMPS dN/dlogDp', color='tab:blue')
+    ax1.step(bin_edges_smps, concentration_smps, where='mid', color='tab:blue', label='SMPS Data', linewidth=2)
+    ax1.plot(bin_edges_smps, gaus(bin_edges_smps, *params_smps), color='tab:blue', linestyle='--', label='SMPS Gaussian Fit')
+
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    ax1.set_ylim(bottom=0)
+
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('CCSEM dN/dlogDp', color='tab:red')
+    ax2.bar(bin_edges_log[:-1], dN_dlogDp, width=bin_widths, align='edge', edgecolor='black', color='red', alpha=0.5)
+    ax2.plot(bin_centers, gaus(bin_centers, *params_nacl), color='tab:red', linestyle='--', label='CCSEM Gaussian Fit')
+
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    ax2.set_ylim(bottom=0)
+
+    
+    ax1.set_xscale('log')
+    ax1.legend(loc='upper left')
+    ax2.legend(loc='upper right')
+
+    
+    a, x0, sigma = params_smps
+    textstr = f'SMPS Fit Parameters:\na = {a:.4f}\nx0 = {x0:.4f} μm\nσ = {sigma:.2f}'
+    ax1.text(0.02, 0.85, textstr, transform=ax1.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', alpha=0.5, color='blue'))
+
+    a, x0, sigma = params_nacl
+    textstr = f'CCSEM Fit Parameters:\na = {a:.4f}\nx0 = {x0:.4f} μm\nσ = {sigma:.2f}'
+    ax1.text(0.02, 0.45, textstr, transform=ax1.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', alpha=0.5, color='red'))
+
+    import os
+    path=os.getcwd()
+    folder=os.path.basename(path)
+
+    plt.title('Particle Size Distribution Comparison,'+folder)
+    fig.savefig('Distribution Comparison'+folder+'.png')
+    
+    
+    ccsem_distribution = pd.DataFrame({'bin_centers_log': bin_edges_log[:-1], 'dN/dlogDp': dN_dlogDp})
+    ccsem_distribution.to_csv('CCSEM dNdlogDp dist'+folder+'.csv')
+    
+
+    
+    plt.show()
+else:
+    print("ECD (μm) column not found in the dataset.")
