@@ -21,7 +21,7 @@ import seaborn as sns
 #dfInt = pd.read_csv(ccsemInt, sep=',',header=[0],encoding='unicode_escape')
 
 
-ccsem='Physical PropertiesCoated_cab_o_jet_atomizer_EDX1_Reduced..csv'
+ccsem='Physical PropertiesCoated_cab_o_jet_250nm_residuals_D4_EDX1_Reduced..csv'
 
 
 df2 = pd.read_csv(ccsem, sep=',',header=[0],encoding='unicode_escape')
@@ -105,7 +105,7 @@ for i in (range(len(figLst))):
     
 #dfInt.plot.scatter(x='ECD (Î¼m)',y='Sphericity',ax=ax2,color='black',label='Interstitials', alpha=0.3)
 plt.title('Clustering,'+ccsem[19:-6])
-fig.savefig('ClusterImg/completeDistribution.png')
+fig.savefig('completeDistribution.png')
 
 fig = plt.figure(figsize = (10, 7))
 ax = plt.axes(projection ="3d")
